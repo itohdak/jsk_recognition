@@ -192,25 +192,43 @@ class PeopleMaskPublisher(ConnectionBasedTransport):
 
         mask_img = np.zeros((img.shape[0], img.shape[1]), dtype=np.bool)
         for person_pose in people_pose:
-            try:
-                rshoulder_index = person_pose.limb_names.index('RShoulder')
-                lshoulder_index = person_pose.limb_names.index('LShoulder')
-                rhip_index = person_pose.limb_names.index('RHip')
-                lhip_index = person_pose.limb_names.index('LHip')
-            except ValueError:
-                continue
-            rshoulder = person_pose.poses[rshoulder_index]
-            lshoulder = person_pose.poses[lshoulder_index]
-            rhip = person_pose.poses[rhip_index]
-            lhip = person_pose.poses[lhip_index]
-            x_min = int(min(rshoulder.position.x, rhip.position.x))
-            x_max = int(max(lshoulder.position.x, lhip.position.x))
-            y_min = int(min(lshoulder.position.y, rshoulder.position.y))
-            y_max = int(max(lhip.position.y, rhip.position.y))
+            x_max = y_max = 0
+            x_min = y_min = 10000
+            for limb in person_pose.poses:
+                x = limb.position.x
+                y = limb.position.y
+                if x_max < x:
+                    x_max = x
+                if x_min > x:
+                    x_min = x
+                if y_max < y:
+                    y_max = y
+                if y_min > y:
+                    y_min = y
+            # try:
+            #     rshoulder_index = person_pose.limb_names.index('RShoulder')
+            #     lshoulder_index = person_pose.limb_names.index('LShoulder')
+            #     rhip_index = person_pose.limb_names.index('RHip')
+            #     lhip_index = person_pose.limb_names.index('LHip')
+            # except ValueError:
+            #     continue
+            # rshoulder = person_pose.poses[rshoulder_index]
+            # lshoulder = person_pose.poses[lshoulder_index]
+            # rhip = person_pose.poses[rhip_index]
+            # lhip = person_pose.poses[lhip_index]
+            # x_min = int(min(rshoulder.position.x, rhip.position.x))
+            # x_max = int(max(lshoulder.position.x, lhip.position.x))
+            # y_min = int(min(lshoulder.position.y, rshoulder.position.y))
+            # y_max = int(max(lhip.position.y, rhip.position.y))
+            x_max = int(round(x_max))
+            x_min = int(round(x_min))
+            y_max = int(round(y_max))
+            y_min = int(round(y_min))
             x_mid = int((x_max + x_min) / 2.)
             y_mid = int((y_max + y_min) / 2.)
-            x_margin = abs(x_max - x_mid)
-            y_margin = abs(y_max - y_mid)
+            gain = 1.2
+            x_margin = int(abs(x_max - x_mid) * gain)
+            y_margin = int(abs(y_max - y_mid) * gain)
             mask_img[y_mid-y_margin : y_mid+y_margin, x_mid-x_margin : x_mid+x_margin] = True
             cv2.rectangle(img, (x_mid-x_margin, y_mid-y_margin), (x_mid+x_margin, y_mid+y_margin),
                           color, rectangle_thickness)
