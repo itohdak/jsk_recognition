@@ -153,8 +153,10 @@ class HMRTrainer(object):
             saver=self.saver,
             summary_writer=self.summary_writer,
             init_fn=init_fn)
+        # gpu_options = tf.GPUOptions(visible_device_list="1", allow_growth=True)
         gpu_options = tf.GPUOptions(allow_growth=True)
         self.sess_config = tf.ConfigProto(
+            # device_count={"GPU":0},
             allow_soft_placement=False,
             log_device_placement=False,
             gpu_options=gpu_options)

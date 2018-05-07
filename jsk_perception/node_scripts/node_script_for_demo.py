@@ -80,9 +80,6 @@ class PeopleMeshDetector(ConnectionBasedTransport):
         joints, verts, cams, joints3d, theta = self.model.predict(
             input_img, get_theta=True)
 
-        # print(len(joints))
-        # print(joints)
-        # print(joints3d)
         ret_img = self._visualize(img, proc_param, joints[0], verts[0], cams[0])
 
         pub_img = br.cv2_to_imgmsg(ret_img, encoding='8UC4')
