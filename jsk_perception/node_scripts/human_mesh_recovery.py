@@ -246,7 +246,7 @@ class HumanMeshRecovery(ConnectionBasedTransport):
             img_feat = self.resnet_v2(imgs).reshape(batch_size, -1)
 
         theta_prev = F.tile(Variable(self.encoder_fc3_model.xp.array(mean, 'f')),
-                            (3, 1))
+                            (batch_size, 1))
         num_cam = 3
         num_theta = 72
         for i in range(self.num_stage):
