@@ -69,7 +69,7 @@ def batch_global_rigid_transformation(Rs, Js, parent, rotate_base=False):
     init_bone = F.pad(init_bone, [[0, 0], [0, 0], [0, 0], [3, 0]], 'constant')
     A = results - init_bone
 
-    return new_J, A
+    return new_J, results
 
 
 def batch_skew(vec, batch_size=None):
