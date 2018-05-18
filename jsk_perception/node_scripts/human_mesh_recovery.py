@@ -29,6 +29,87 @@ from hmr.net import EncoderFC3Dropout
 from hmr.resnet_v2_50 import ResNet_v2_50
 
 
+def format_pose_msg(person_pose):
+    key_points = []
+    for pose, score in zip(person_pose.poses, person_pose.scores):
+        key_points.append(pose.position.x)
+        key_points.append(pose.position.y)
+        key_points.append(score)
+    return np.array(key_points, 'f').reshape(-1, 3)
+
+
+def resize_img(img, scale_factor):
+    new_size = (np.floor(np.array(img.shape[0:2]) * scale_factor)).astype(int)
+    new_img = cv2.resize(img, (new_size[1], new_size[0]))
+    # This is scale factor of [height, width] i.e. [y, x]
+    actual_factor = [
+        new_size[0] / float(img.shape[0]), new_size[1] / float(img.shape[1])
+    ]
+    return new_img, actual_factor
+
+
+def scale_and_crop(image, scale, center, img_size):
+    image_scaled, scale_factors = resize_img(image, scale)
+    # Swap so it's [x, y]
+    scale_factors = [scale_factors[1], scale_factors[0]]
+    center_scaled = np.round(center * scale_factors).astype(np.int)
+
+    margin = int(img_size / 2)
+    image_pad = np.pad(
+        image_scaled, ((margin, ), (margin, ), (0, )), mode='edge')
+    center_pad = center_scaled + margin
+    # figure out starting point
+    start_pt = center_pad - margin
+    end_pt = center_pad + margin
+    # crop:
+    crop = image_pad[start_pt[1]:end_pt[1], start_pt[0]:end_pt[0], :]
+    proc_param = {
+        'scale': scale,
+        'start_pt': start_pt,
+        'end_pt': end_pt,
+        'img_size': img_size
+    }
+
+    return crop, proc_param
+
+
+def get_bbox(key_points, vis_thr=0.2):
+    # Pick the most confident detection.
+    vis = key_points[:, 2] > vis_thr
+    vis_kp = key_points[vis, :2]
+    if len(vis_kp) == 0:
+        return False, False
+    min_pt = np.min(vis_kp, axis=0)
+    max_pt = np.max(vis_kp, axis=0)
+    person_height = np.linalg.norm(max_pt - min_pt)
+    if person_height == 0:
+        return False, False
+    center = (min_pt + max_pt) / 2.
+    scale = 150. / person_height
+    return scale, center
+
+
+def preprocess_image(img, key_points=None, img_size=224):
+    if key_points is None:
+        scale = 1.
+        center = np.round(np.array(img.shape[:2]) / 2).astype(int)
+        # image center in (x,y)
+        center = center[::-1]
+    else:
+        scale, center = get_bbox(key_points, vis_thr=0.1)
+        if scale is False:
+            scale = 1.
+            center = np.round(np.array(img.shape[:2]) / 2).astype(int)
+            # image center in (x,y)
+            center = center[::-1]
+    crop_img, proc_param = scale_and_crop(img, scale, center,
+                                      img_size)
+
+    # Normalize image to [-1, 1]
+    crop_img = 2 * ((crop_img / 255.) - 0.5)
+    return crop_img, proc_param
+
+
 mean = np.array([[0.90365213, -0.00383353,  0.03301106,  3.14986515, -0.01883755,
                   0.16895422, -0.15615709, -0.0058559,  0.07191881, -0.18924442,
                   -0.04396844, -0.05114707,  0.24385466,  0.00881136,  0.02384637,
@@ -112,7 +193,25 @@ class HumanMeshRecovery(ConnectionBasedTransport):
     def _cb(self, img_msg):
         br = self.br
         img = br.imgmsg_to_cv2(img_msg, desired_encoding='bgr8')
-        verts, Js, Rs, A, cams, poses, shapes = self.pose_estimate(img)
+        img, _ = preprocess_image(img)
+        imgs = img.transpose(2, 0, 1)[None, ]
+        verts, Js, Rs, A, cams, poses, shapes = self.pose_estimate(imgs)
+
+        people_pose_msg = self._create_people_pose_array_msgs(
+            chainer.cuda.to_cpu(A.data), img_msg.header)
+        self.pose_pub.publish(people_pose_msg)
+
+    def _cb_with_pose(self, img_msg, people_pose_msg):
+        br = self.br
+        img = br.imgmsg_to_cv2(img_msg, desired_encoding='bgr8')
+
+        imgs = []
+        for person_pose in people_pose_msg.poses:
+            key_points = format_pose_msg(person_pose)
+            crop_img, _ = preprocess_image(img, key_points)
+            imgs.append(crop_img)
+        imgs = np.array(imgs, 'f').transpose(0, 3, 1, 2)
+        verts, Js, Rs, A, cams, poses, shapes = self.pose_estimate(imgs)
 
         people_pose_msg = self._create_people_pose_array_msgs(
             chainer.cuda.to_cpu(A.data), img_msg.header)
@@ -139,14 +238,12 @@ class HumanMeshRecovery(ConnectionBasedTransport):
             people_pose_msg.poses.append(pose_msg)
         return people_pose_msg
 
-    def pose_estimate(self, img):
-        img = cv2.resize(img, (224, 224))
-        imgs = img.transpose(2, 0, 1)[None, ]
-
+    def pose_estimate(self, imgs):
+        batch_size = imgs.shape[0]
         imgs = Variable(self.resnet_v2.xp.array(imgs, 'f'))
         with chainer.using_config('train', False), \
                 chainer.using_config('enable_backprop', False):
-            img_feat = self.resnet_v2(imgs).reshape(1, -1)
+            img_feat = self.resnet_v2(imgs).reshape(batch_size, -1)
 
         theta_prev = Variable(self.encoder_fc3_model.xp.array(mean, 'f'))
         num_cam = 3
