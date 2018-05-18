@@ -30,6 +30,7 @@
     <remap from="~input/pose" to="people_pose_estimation_2d/pose" />
     <rosparam subst_value="true">
       gpu: $(arg GPU)
+      with_people_pose: true
       smpl_model_file: $(find jsk_perception)/trained_data/hmr_smpl.npz
       encoder_model_file: $(find jsk_perception)/trained_data/hmr_encoder_fc3_model.npz
       resnet_v2_50_model_file : $(find jsk_perception)/trained_data/hmr_resnet_v2_50_model.npz
