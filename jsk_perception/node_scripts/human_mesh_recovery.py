@@ -210,7 +210,11 @@ class HumanMeshRecovery(ConnectionBasedTransport):
             key_points = format_pose_msg(person_pose)
             crop_img, _ = preprocess_image(img, key_points)
             imgs.append(crop_img)
-        imgs = np.array(imgs, 'f').transpose(0, 3, 1, 2)
+        if len(imgs) == 0:
+            img, _ = preprocess_image(img)
+            imgs = np.array(img[None, ], 'f').transpose(0, 3, 1, 2)
+        else:
+            imgs = np.array(imgs, 'f').transpose(0, 3, 1, 2)
         verts, Js, Rs, A, cams, poses, shapes = self.pose_estimate(imgs)
 
         people_pose_msg = self._create_people_pose_array_msgs(
