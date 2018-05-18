@@ -148,7 +148,7 @@ class HumanMeshRecovery(ConnectionBasedTransport):
                 chainer.using_config('enable_backprop', False):
             img_feat = self.resnet_v2(imgs).reshape(1, -1)
 
-        theta_prev = mean
+        theta_prev = Variable(self.encoder_fc3_model.xp.array(mean, 'f'))
         num_cam = 3
         num_theta = 72
         for i in range(self.num_stage):
