@@ -149,4 +149,4 @@ def batch_global_rigid_transformation(Rs, Js, parent, rotate_base=False):
         init_bone = tf.pad(init_bone, [[0, 0], [0, 0], [0, 0], [3, 0]])
         A = results - init_bone
 
-        return new_J, A
+        return new_J, A, results
