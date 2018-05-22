@@ -6,7 +6,7 @@
   <arg name="INPUT_DEPTH_IMAGE" default="/camera/depth_registered/hw_registered/image_rect_raw" />
   <arg name="INPUT_CAMERA_INFO" default="/camera/rgb/camera_info" />
 
-  <include file="$(find jsk_perception)/sample/include/play_rosbag_people.xml" />
+  <!-- <include file="$(find jsk_perception)/sample/include/play_rosbag_people.xml" /> -->
 
   <node name="people_pose_estimation_2d"
         pkg="jsk_perception" type="people_pose_estimation_2d.py"
@@ -35,6 +35,11 @@
       encoder_model_file: $(find jsk_perception)/trained_data/hmr_encoder_fc3_model.npz
       resnet_v2_50_model_file : $(find jsk_perception)/trained_data/hmr_resnet_v2_50_model.npz
     </rosparam>
+  </node>
+
+  <node name="people_poses_to_poses"
+        pkg="jsk_recognition_msgs" type="people_pose_array_to_pose_array.py">
+    <remap from="~input" to="human_mesh_recovery/pose" />
   </node>
 
   <group if="$(arg gui)" >
