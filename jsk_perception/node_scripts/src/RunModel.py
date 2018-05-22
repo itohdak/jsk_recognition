@@ -8,7 +8,6 @@ import tensorflow as tf
 import numpy as np
 from os.path import exists
 
-# dependings
 from .tf_smpl import projection as proj_util
 from .tf_smpl.batch_smpl import SMPL
 from .models import get_encoder_fn_separate
@@ -114,7 +113,7 @@ class RunModel(object):
             poses = theta_here[:, self.num_cam:(self.num_cam + self.num_theta)]
             shapes = theta_here[:, (self.num_cam + self.num_theta):]
 
-            verts, Js, _ = self.smpl(shapes, poses, get_skin=True)
+            verts, Js, _, results = self.smpl(shapes, poses, get_skin=True)
 
             # Project to 2D!
             pred_kp = self.proj_fn(Js, cams, name='proj_2d_stage%d' % i)
@@ -124,6 +123,7 @@ class RunModel(object):
             self.all_Js.append(Js)
             # save each theta.
             self.final_thetas.append(theta_here)
+            self.results = results
             # Finally)update to end iteration.
             theta_prev = theta_here
 
@@ -141,7 +141,7 @@ class RunModel(object):
         results = self.predict_dict(images)
         if get_theta:
             return results['joints'], results['verts'], results['cams'], results[
-                'joints3d'], results['theta']
+                'joints3d'], results['theta'], results["results"]
         else:
             return results['joints'], results['verts'], results['cams'], results[
                 'joints3d']
@@ -162,6 +162,7 @@ class RunModel(object):
             'cams': self.all_cams[-1],
             'joints3d': self.all_Js[-1],
             'theta': self.final_thetas[-1],
+            "results": self.results,
         }
 
         results = self.sess.run(fetch_dict, feed_dict)

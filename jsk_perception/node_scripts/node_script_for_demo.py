@@ -27,6 +27,8 @@ import message_filters
 from jsk_topic_tools import ConnectionBasedTransport
 from jsk_recognition_msgs.msg import PeoplePoseArray
 from sensor_msgs.msg import Image
+from geometry_msgs.msg import PoseArray, Pose, Point, Quaternion
+import tf as transform
 
 flags.DEFINE_string('img_path', 'data/im1963.jpg', 'Image to run')
 flags.DEFINE_string(
@@ -37,11 +39,18 @@ class PeopleMeshDetector(ConnectionBasedTransport):
     def __init__(self):
         super(self.__class__, self).__init__()
 
-        self.sess = tf.Session()
+        gpu_options = tf.GPUOptions(allow_growth=True)
+        self.sess_config = tf.ConfigProto(
+            allow_soft_placement=False,
+            log_device_placement=False,
+            gpu_options=gpu_options)
+
+        self.sess = tf.Session(config=self.sess_config)
         self.model = RunModel(config, sess=self.sess)
 
         self.with_pose = rospy.get_param('~with_pose', False)
-        self.publisher = self.advertise("~output", Image, queue_size=1)
+        self.img_pub = self.advertise("~output", Image, queue_size=1)
+        self.joints_pub = self.advertise("~output_pose", PoseArray, queue_size=1)
 
     def subscribe(self):
         queue_size = rospy.get_param('~queue_size', 10)
@@ -77,7 +86,7 @@ class PeopleMeshDetector(ConnectionBasedTransport):
         input_img, proc_param, img = self._preprocess_image(
             None, img, json_path, None)
         input_img = np.expand_dims(input_img, 0)
-        joints, verts, cams, joints3d, theta = self.model.predict(
+        joints, verts, cams, joints3d, theta, results = self.model.predict(
             input_img, get_theta=True)
 
         ret_img = self._visualize(img, proc_param, joints[0], verts[0], cams[0])
@@ -85,29 +94,46 @@ class PeopleMeshDetector(ConnectionBasedTransport):
         pub_img = br.cv2_to_imgmsg(ret_img, encoding='8UC4')
         pub_img.header = img_msg.header
 
-        self.publisher.publish(pub_img)
+        self.img_pub.publish(pub_img)
 
     def _cb_with_pose(self, img_msg, pose):
-        rospy.loginfo("cb_witrh_pose")
         br = cv_bridge.CvBridge()
         img = br.imgmsg_to_cv2(img_msg, desired_encoding='bgr8')
         json_path = None
         input_img, proc_param, img = self._preprocess_image(
             None, img, json_path, pose)
         input_img = np.expand_dims(input_img, 0)
-        joints, verts, cams, joints3d, theta = self.model.predict(
+        joints, verts, cams, joints3d, theta, results = self.model.predict(
             input_img, get_theta=True)
-        rospy.loginfo("joints3d = {}".format(1000 * joints3d))
 
-        # print(len(joints))
-        # print(joints)
-        # print(joints3d)
+        # rospy.loginfo("results[-1] = {}".format(results[-1]))
+        pub_joints = PoseArray()
+        pub_joints.header = img_msg.header
+        index = 0
+        for result in results[-1]:
+            x, y, z = result[:3, 3]
+            q_x, q_y, q_z, q_w = transform.transformations.quaternion_from_matrix(result)
+            pose = Pose()
+            pose.position = Point(x, y, z)
+            pose.orientation = Quaternion(q_x, q_y, q_z, q_w)
+            pub_joints.poses.append(pose)
+
+            # Broadcast tf
+            # broadcaster = transform.TransformBroadcaster()
+            # broadcaster.sendTransform((x, y, z),
+            #                           (q_x, q_y, q_z, q_w),
+            #                           img_msg.header.stamp,
+            #                           "joint" + str(index),
+            #                           img_msg.header.frame_id)
+            index += 1
+
         ret_img = self._visualize(img, proc_param, joints[0], verts[0], cams[0])
 
         pub_img = br.cv2_to_imgmsg(ret_img, encoding='8UC4')
         pub_img.header = img_msg.header
 
-        self.publisher.publish(pub_img)
+        self.img_pub.publish(pub_img)
+        self.joints_pub.publish(pub_joints)
 
     def _visualize(self, img, proc_param, joints, verts, cam):
         """
@@ -210,6 +236,7 @@ class PeopleMeshDetector(ConnectionBasedTransport):
         max_pt = np.max(vis_kp, axis=0)
         person_height = np.linalg.norm(max_pt - min_pt)
         if person_height == 0:
+            return False, False
             print('bad!')
             import ipdb
             ipdb.set_trace()
