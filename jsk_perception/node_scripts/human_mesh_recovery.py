@@ -216,6 +216,7 @@ class HumanMeshRecovery(ConnectionBasedTransport):
         else:
             imgs = np.array(imgs, 'f').transpose(0, 3, 1, 2)
         verts, Js, Rs, A, cams, poses, shapes = self.pose_estimate(imgs)
+        rospy.loginfo("verts {}".format(verts.shape))
 
         people_pose_msg = self._create_people_pose_array_msgs(
             chainer.cuda.to_cpu(A.data), img_msg.header)
