@@ -17,29 +17,29 @@ endif()
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   dynamic_reconfigure
-  eigen_conversions
-  genmsg
-  geometry_msgs
+  # eigen_conversions
+  # genmsg
+  # geometry_msgs
   image_geometry
-  image_transport
+  # image_transport
   interactive_markers
-  jsk_footstep_msgs
+  # jsk_footstep_msgs
   jsk_pcl_ros_utils
-  jsk_recognition_msgs
+  # jsk_recognition_msgs
   jsk_recognition_utils
   jsk_topic_tools
-  kdl_conversions
-  kdl_parser
+  # kdl_conversions
+  # kdl_parser
   laser_assembler
-  nodelet
+  # nodelet
   moveit_ros_perception
-  octomap_msgs
+  # octomap_msgs
   octomap_server
   pcl_msgs
   pcl_ros
-  sensor_msgs
+  # sensor_msgs
   tf
-  tf2_ros
+  # tf2_ros
   tf_conversions
   )
 find_package(PkgConfig)
@@ -123,6 +123,7 @@ generate_dynamic_reconfigure_options(
   cfg/PPFRegistration.cfg
   cfg/PrimitiveShapeClassifier.cfg
   cfg/Kinfu.cfg
+  cfg/PointcloudScreenpoint.cfg
   )
 
 find_package(OpenCV REQUIRED core imgproc)
@@ -261,8 +262,8 @@ jsk_pcl_nodelet(src/region_growing_multiple_plane_segmentation_nodelet.cpp
   "region_growing_multiple_plane_segmentation")
 
 if(${PCL_VERSION} VERSION_GREATER "1.7.2")
-  jsk_pcl_nodelet(src/organized_edge_detector_nodelet.cpp
-    "jsk_pcl/OrganizedEdgeDetector" "organized_edge_detector")
+  # jsk_pcl_nodelet(src/organized_edge_detector_nodelet.cpp
+  #   "jsk_pcl/OrganizedEdgeDetector" "organized_edge_detector")
 endif(${PCL_VERSION} VERSION_GREATER "1.7.2")
 
 jsk_pcl_nodelet(src/edge_depth_refinement_nodelet.cpp
@@ -398,11 +399,11 @@ add_library(jsk_pcl_ros SHARED ${jsk_pcl_nodelet_sources})
 if (PCL_GPU_KINFU_LARGE_SCALE_FOUND)
   target_link_libraries(jsk_pcl_ros
     ${PCL_GPU_KINFU_LARGE_SCALE_LIBRARY} ${PCL_GPU_CONTAINERS_LIBRARY}
-    ${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp
+    ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp
     jsk_pcl_ros_base)
 else (PCL_GPU_KINFU_LARGE_SCALE_FOUND)
   target_link_libraries(jsk_pcl_ros
-    ${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp
+    ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp
     jsk_pcl_ros_base)
 endif (PCL_GPU_KINFU_LARGE_SCALE_FOUND)
 if (robot_self_filter_FOUND)
@@ -410,14 +411,14 @@ if (robot_self_filter_FOUND)
   target_link_libraries(jsk_pcl_ros ${robot_self_filter_LIBRARIES})
 endif (robot_self_filter_FOUND)
 
-add_dependencies(jsk_pcl_ros ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
-add_dependencies(jsk_pcl_ros_base ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
-add_dependencies(jsk_pcl_ros_moveit ${PROJECT_NAME}_gencpp ${PROJECT_NAME}_gencfg)
+add_dependencies(jsk_pcl_ros ${PROJECT_NAME}_gencfg)
+add_dependencies(jsk_pcl_ros_base ${PROJECT_NAME}_gencfg)
+add_dependencies(jsk_pcl_ros_moveit ${PROJECT_NAME}_gencfg)
 
 target_link_libraries(jsk_pcl_ros_base
-  ${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+  ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 target_link_libraries(jsk_pcl_ros_moveit
-  ${catkin_LIBRARIES} ${moveit_ros_perception_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
+  ${catkin_LIBRARIES} ${moveit_ros_perception_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} yaml-cpp)
 
 
 # bench/ directory
@@ -439,8 +440,8 @@ get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTO
 message("flags: ${CMAKE_CXX_FLAGS}")
 
 catkin_package(
-    DEPENDS pcl
-    CATKIN_DEPENDS pcl_ros ${PCL_MSGS} sensor_msgs geometry_msgs jsk_recognition_msgs jsk_recognition_utils
+    DEPENDS PCL
+    CATKIN_DEPENDS pcl_ros ${PCL_MSGS} jsk_recognition_utils
     INCLUDE_DIRS include
     LIBRARIES jsk_pcl_ros jsk_pcl_ros_base jsk_pcl_ros_moveit
 )

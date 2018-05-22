@@ -48,6 +48,7 @@ include(UseCython)
 add_subdirectory(python/${PROJECT_NAME})
 
 find_package(OpenCV REQUIRED core imgproc)
+find_package(PCL REQUIRED)
 find_package(PkgConfig)
 pkg_check_modules(yaml_cpp yaml-cpp REQUIRED)
 IF(${yaml_cpp_VERSION} VERSION_LESS "0.5.0")
@@ -60,7 +61,7 @@ endif()
 include_directories(
   include ${catkin_INCLUDE_DIRS}
 )
-link_libraries(${catkin_LIBRARIES} ${pcl_ros_LIBRARIES} ${OpenCV_LIBRARIES}  yaml-cpp)
+link_libraries(${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${PCL_LIBRARIES} yaml-cpp)
 
 add_library(jsk_recognition_utils SHARED
   src/grid_index.cpp
@@ -99,7 +100,8 @@ if (CATKIN_ENABLE_TESTING)
   if("$ENV{ROS_DISTRO}" STRGREATER "hydro")
     # FIXME: jsk_tools/test_topic_published.py does not work on hydro travis/jenkins
     # https://github.com/jsk-ros-pkg/jsk_common/pull/1293#issuecomment-164158260
-    add_rostest(test/bounding_box_array_publisher.test)
+    add_rostest(sample/sample_add_bounding_box_array.launch ARGS gui:=false)
+    add_rostest(sample/sample_bounding_box_array_publisher.launch ARGS gui:=false)
   endif()
 endif()
 
