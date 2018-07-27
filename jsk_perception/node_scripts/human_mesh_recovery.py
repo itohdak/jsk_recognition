@@ -23,6 +23,9 @@ from geometry_msgs.msg import Quaternion
 from jsk_recognition_msgs.msg import PeoplePose
 from jsk_recognition_msgs.msg import PeoplePoseArray
 from sensor_msgs.msg import Image
+from visualization_msgs.msg import MarkerArray, Marker
+from geometry_msgs.msg import Vector3
+from std_msgs.msg import ColorRGBA
 
 from hmr.smpl import SMPL
 from hmr.net import EncoderFC3Dropout
@@ -145,6 +148,7 @@ class HumanMeshRecovery(ConnectionBasedTransport):
         self.br = cv_bridge.CvBridge()
         self.image_pub = self.advertise('~output', Image, queue_size=1)
         self.pose_pub = self.advertise('~pose', PeoplePoseArray, queue_size=1)
+        self.mesh_model_pub = self.advertise('~mesh_model', MarkerArray, queue_size=1)
 
     def _load_model(self):
         smpl_model_file = rospy.get_param('~smpl_model_file')
@@ -216,11 +220,14 @@ class HumanMeshRecovery(ConnectionBasedTransport):
         else:
             imgs = np.array(imgs, 'f').transpose(0, 3, 1, 2)
         verts, Js, Rs, A, cams, poses, shapes = self.pose_estimate(imgs)
-        rospy.loginfo("verts {}".format(verts.shape))
 
         people_pose_msg = self._create_people_pose_array_msgs(
             chainer.cuda.to_cpu(A.data), img_msg.header)
         self.pose_pub.publish(people_pose_msg)
+
+        human_mesh_model_msg = self._create_human_mesh_model_array_msgs(
+            chainer.cuda.to_cpu(verts.data), img_msg.header)
+        self.mesh_model_pub.publish(human_mesh_model_msg)
 
     def _create_people_pose_array_msgs(self, people_joint_positions, header):
         people_pose_msg = PeoplePoseArray(header=header)
@@ -242,6 +249,35 @@ class HumanMeshRecovery(ConnectionBasedTransport):
                         w=q_xyzw[3])))
             people_pose_msg.poses.append(pose_msg)
         return people_pose_msg
+
+    def _create_human_mesh_model_array_msgs(self, verts, header):
+        human_mesh_model_msg = MarkerArray()
+        for human_verts, i in zip(verts, range(verts.shape[0])):
+            human_mesh_model = Marker(header=header,
+                                      id=i,
+                                      type=Marker.TRIANGLE_LIST,
+                                      pose=Pose(position=Point(x=1,
+                                                               y=1,
+                                                               z=1),
+                                                orientation=Quaternion(x=0,
+                                                                       y=0,
+                                                                       z=0,
+                                                                       w=1)),
+                                      scale=Vector3(x=1, y=1, z=1),
+
+                                      color=ColorRGBA(r=255/255., g=228/255., b=196/255., a=1),
+                                      lifetime=rospy.Time(100))
+            points = []
+            colors = []
+            for vert, j in zip(human_verts, range(len(human_verts)/3*3)):
+                points.append(Point(x=vert[0],
+                                    y=vert[1],
+                                    z=vert[2]))
+                colors.append(ColorRGBA(r=255/255., g=228/255., b=196/255., a=1))
+            human_mesh_model.points = points
+            human_mesh_model.colors = colors
+            human_mesh_model_msg.markers.append(human_mesh_model)
+        return human_mesh_model_msg
 
     def pose_estimate(self, imgs):
         batch_size = imgs.shape[0]
