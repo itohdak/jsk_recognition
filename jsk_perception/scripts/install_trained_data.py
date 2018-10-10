@@ -45,6 +45,15 @@ def main():
         md5='97eb737f71a33bfc23ec573f1d351bd8',
         quiet=quiet,
     )
+
+    download_data(
+        pkg_name=PKG,
+        path='trained_data/apc2015_sample_bof_sklearn==0.20.0.pkl.gz',
+        url='https://drive.google.com/uc?id=1VRwQxbjtSI4I1cjIqUFaemiUTHE4wlDj',
+        md5='001dbd0767369daff0cafb8fc7b39e92',
+        quiet=quiet,
+    )
+
     download_data(
         pkg_name=PKG,
         path='trained_data/apc2015_sample_clf.pkl.gz',
@@ -133,28 +142,14 @@ def main():
             md5='c0683094aa42eab1b9424e05112190c5',
         )
 
-    # node_scripts/human_mesh_recovery.py
+    path = 'trained_data/hand_ssd300_chainermodel.npz'
     if _chainer_available:
         download_data(
             pkg_name=PKG,
-            path='trained_data/hmr_smpl.npz',
+            path=path,
             url='https://drive.google.com/'
-            'uc?id=10TIlcXBdKreTapQuZEIjWeeWwxG32gM6',
-            md5='d4a0c097b0ee26b93fa07f83c1c5e259',
-        )
-        download_data(
-            pkg_name=PKG,
-            path='trained_data/hmr_resnet_v2_50_model.npz',
-            url='https://drive.google.com/'
-            'uc?id=1_JGxDnANk1pj23PW3T4JFRfei6Qs2Wwz',
-            md5='742a129d5b6dd62e71a081973128beb9',
-        )
-        download_data(
-            pkg_name=PKG,
-            path='trained_data/hmr_encoder_fc3_model.npz',
-            url='https://drive.google.com/'
-            'uc?id=19nGjVyIaXMhILS32J4whQgApY_qKYURj',
-            md5='33d80575b507b66c975f350f2f24ee91',
+            'uc?id=1rJ_ZYY-AjKqvlJGLF6RJ_I_vuaOp3lXg',
+            md5='ba1226f8dd816514e610a746278be02e',
         )
 
     # node_scripts/feature_based_object_recognition.py
