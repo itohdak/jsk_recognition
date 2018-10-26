@@ -10,6 +10,7 @@ import rospy
 from jsk_topic_tools import ConnectionBasedTransport
 from jsk_recognition_msgs.msg import PeoplePoseArray
 from sensor_msgs.msg import Image
+from std_msgs.msg import String
 
 
 class PeopleMaskPublisher(ConnectionBasedTransport):
@@ -48,7 +49,11 @@ class PeopleMaskPublisher(ConnectionBasedTransport):
 
         self.pub = self.advertise('~output', Image, queue_size=1)
         self.debug_pub = self.advertise('~debug/output', Image, queue_size=1)
-        # self.skelton
+
+        self.pub_direction = self.advertise('~output/direction', String, queue_size=1)
+        self.prev_vector = None
+        self.threshold_direction = rospy.get_param('~threshold_direction', 0.3)
+        self.inertia_rate = 0.2
 
     def subscribe(self):
         queue_size = rospy.get_param('~queue_size', 10)
@@ -84,17 +89,22 @@ class PeopleMaskPublisher(ConnectionBasedTransport):
         mask_img = np.zeros((img.shape[0], img.shape[1]), dtype=np.bool)
         arm = [limb_prefix for limb_prefix in ['R', 'L']
                if limb_prefix + 'Hand' in self.limb_part]
-        nose = ['Nose' in self.limb_part]
-        body = ['Body' in self.limb_part]
+        # nose = ['Nose' in self.limb_part]
+        # body = ['Body' in self.limb_part]
+        nose = ('Nose' == self.limb_part)
+        body = ('Body' == self.limb_part)
         if arm:
             arm_mask_img, debug_img = self._create_hand_mask(people_pose, img, arm)
             mask_img = np.bitwise_or(mask_img, arm_mask_img)
-        elif nose:
+            direction = self.predict_direction(people_pose, img)
+        if nose:
             nose_mask_img, debug_img = self._create_nose_mask(people_pose, img)
             mask_img = np.bitwise_or(mask_img, nose_mask_img)
-        # elif body:
-        #     body_mask_img, debug_img = self._create_body_mask(people_pose, img)
-        #     mask_img = np.bitwise_or(mask_img, body_mask_img)
+            direction = self.predict_direction(people_pose, img)
+        if body:
+            body_mask_img, debug_img = self._create_body_mask(people_pose, img)
+            mask_img = np.bitwise_or(mask_img, body_mask_img)
+            direction = self.predict_direction(people_pose, img)
 
         mask_msg = br.cv2_to_imgmsg(np.uint8(mask_img * 255.0), encoding='mono8')
         mask_msg.header = img_msg.header
@@ -104,6 +114,8 @@ class PeopleMaskPublisher(ConnectionBasedTransport):
 
         self.pub.publish(mask_msg)
         self.debug_pub.publish(debug_msg)
+        if self.limb_part == "Nose" or self.limb_part == "RHand":
+            self.pub_direction.publish(direction)
 
     def _create_hand_mask(self, people_pose, img, arm=['R', 'L']):
         rectangle_thickness = 5
@@ -174,32 +186,81 @@ class PeopleMaskPublisher(ConnectionBasedTransport):
                           color, rectangle_thickness)
         return mask_img, img
 
-    # def _create_body_mask(self, people_pose, img):
-    #     rectangle_thickness = 5
-    #     color = (0, 255, 0)
+    def _create_body_mask(self, people_pose, img):
+        rectangle_thickness = 5
+        color = (0, 255, 0)
 
-    #     mask_img = np.zeros((img.shape[0], img.shape[1]), dtype=np.bool)
-    #     for person_pose in people_pose:
-    #         try:
-    #             RShoulder_index = person_pose.limb_names.index('RShoulder')
-    #             LShoulder_index = person_pose.limb_names.index('LShoulder')
-    #             RHip_index = person_pose.limb_names.index('RHip')
-    #             LHip_index = person_pose.limb_names.index('LHip')
-    #         except ValueError:
-    #             continue
-    #         RShoulder = person_pose.poses[RShoulder_index]
-    #         LShoulder = person_pose.poses[LShoulder_index]
-    #         RHip = person_pose.poses[RHip_index]
-    #         LHip = person_pose.poses[LHip_index]
-    #         center_of_Shoulders = (RShoulder + LShoulder) / 2.0
-    #         center_of_Hips = (RHip + LHip) / 2.0
-    #         x = int(nose.position.x)
-    #         y = int(nose.position.y)
-    #         margin = 15
-    #         mask_img[y-margin : y+margin, x-margin : x+margin] = True
-    #         cv2.rectangle(img, (x-margin, y-margin), (x+margin, y+margin),
-    #                       color, rectangle_thickness)
-    #     return mask_img, img
+        mask_img = np.zeros((img.shape[0], img.shape[1]), dtype=np.bool)
+        for person_pose in people_pose:
+            x_max = y_max = 0
+            x_min = y_min = 10000
+            for limb in person_pose.poses:
+                x = limb.position.x
+                y = limb.position.y
+                if x_max < x:
+                    x_max = x
+                if x_min > x:
+                    x_min = x
+                if y_max < y:
+                    y_max = y
+                if y_min > y:
+                    y_min = y
+            # try:
+            #     rshoulder_index = person_pose.limb_names.index('RShoulder')
+            #     lshoulder_index = person_pose.limb_names.index('LShoulder')
+            #     rhip_index = person_pose.limb_names.index('RHip')
+            #     lhip_index = person_pose.limb_names.index('LHip')
+            # except ValueError:
+            #     continue
+            # rshoulder = person_pose.poses[rshoulder_index]
+            # lshoulder = person_pose.poses[lshoulder_index]
+            # rhip = person_pose.poses[rhip_index]
+            # lhip = person_pose.poses[lhip_index]
+            # x_min = int(min(rshoulder.position.x, rhip.position.x))
+            # x_max = int(max(lshoulder.position.x, lhip.position.x))
+            # y_min = int(min(lshoulder.position.y, rshoulder.position.y))
+            # y_max = int(max(lhip.position.y, rhip.position.y))
+            x_max = int(round(x_max))
+            x_min = int(round(x_min))
+            y_max = int(round(y_max))
+            y_min = int(round(y_min))
+            x_mid = int((x_max + x_min) / 2.)
+            y_mid = int((y_max + y_min) / 2.)
+            gain = 1.2
+            x_margin = int(abs(x_max - x_mid) * gain)
+            y_margin = int(abs(y_max - y_mid) * gain)
+            mask_img[y_mid-y_margin : y_mid+y_margin, x_mid-x_margin : x_mid+x_margin] = True
+            cv2.rectangle(img, (x_mid-x_margin, y_mid-y_margin), (x_mid+x_margin, y_mid+y_margin),
+                          color, rectangle_thickness)
+        return mask_img, img
+
+    def predict_direction(self, people_pose, img):
+        for person_pose in people_pose:
+            try:
+                nose_index = person_pose.limb_names.index('Nose')
+                neck_index = person_pose.limb_names.index('Neck')
+            except ValueError:
+                continue
+            nose = person_pose.poses[nose_index]
+            neck = person_pose.poses[neck_index]
+            nose_pos = np.array([nose.position.x, nose.position.y])
+            neck_pos = np.array([neck.position.x, neck.position.y])
+            vector_neck_to_nose = nose_pos - neck_pos
+            if vector_neck_to_nose[0] == 0 and vector_neck_to_nose[1] == 0:
+                return ""
+            normalize_vector = vector_neck_to_nose / np.sqrt(vector_neck_to_nose[0] ** 2 + vector_neck_to_nose[1] ** 2)
+            if self.prev_vector is None:
+                normalize_vector_with_inertia = np.copy(normalize_vector)
+            else:
+                normalize_vector_with_inertia = normalize_vector * (1 - self.inertia_rate) + self.prev_vector * self.inertia_rate
+            self.prev_vector = normalize_vector
+            if normalize_vector_with_inertia[0] > self.threshold_direction:
+                return "right"
+            elif normalize_vector_with_inertia[0] < - self.threshold_direction:
+                return "left"
+            else:
+                return "forward"
+
 
 if __name__ == '__main__':
     rospy.init_node('people_mask_publisher')

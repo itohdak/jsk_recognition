@@ -1,0 +1,193 @@
+<launch>
+
+  <arg name="gui" default="true" />
+  <arg name="GPU" default="-1" />
+  <arg name="INPUT_IMAGE" default="/camera_remote/rgb_half/image_rect_color" />
+  <arg name="INPUT_DEPTH_IMAGE" default="/camera_remote/depth_registered/hw_registered/image_rect_raw" />
+  <arg name="INPUT_CAMERA_INFO" default="/camera_remote/rgb_half/camera_info" />
+  <arg name="INPUT_CLOUD" default="/camera_remote/depth_registered/points" />
+
+  <arg name="MANAGER" value="people_pose_estimation_2d_nodelet_manager" />
+  <node name="$(arg MANAGER)"
+        pkg="nodelet" type="nodelet"
+        args="manager"/>
+
+  <!-- relay input -->
+  <node pkg="nodelet" type="nodelet" name="input_cloud_relay"
+        args="load jsk_topic_tools/Relay $(arg MANAGER)">
+    <remap from="~input" to="$(arg INPUT_CLOUD)" />
+    <remap from="~output" to="$(arg INPUT_CLOUD)_relayed" />
+  </node>
+
+  <node name="people_pose_estimation_2d"
+        pkg="jsk_perception" type="people_pose_estimation_2d.py"
+        output="screen">
+    <remap from="~input" to="$(arg INPUT_IMAGE)" />
+    <remap from="~input/info" to="$(arg INPUT_CAMERA_INFO)" />
+    <remap from="~input/depth" to="$(arg INPUT_DEPTH_IMAGE)" />
+    <rosparam subst_value="true">
+      gpu: $(arg GPU)
+      model_file: $(find jsk_perception)/trained_data/pose_estimation_2d_chainermodel.pkl
+      with_depth: true
+      scales: [0.38]
+      stride: 8
+    </rosparam>
+  </node>
+
+  <!-- for RHand -->
+  <!-- <group ns="rh_recog"> -->
+    <node name="people_mask_publisher_right"
+          pkg="jsk_perception" type="people_mask_publisher.py"
+          output="screen">
+      <remap from="~input" to="$(arg INPUT_IMAGE)" />
+      <remap from="~input/pose" to="people_pose_estimation_2d/pose_2d" />
+      <rosparam>
+        person_indices: 0
+        limb_part: RHand
+      </rosparam>
+    </node>
+
+    <node name="apply_mask_image_right"
+          pkg="nodelet" type="nodelet"
+          args="standalone jsk_perception/ApplyMaskImage" >
+      <remap from="~input" to="$(arg INPUT_IMAGE)" />
+      <remap from="~input/mask" to="people_mask_publisher_right/output" />
+      <rosparam>
+        clip: false
+      </rosparam>
+    </node>
+
+    <include file="$(find opencv_apps)/launch/hsv_color_filter.launch" >
+      <arg name="node_name" value="hsv_color_filter_right" />
+      <arg name="image" value="apply_mask_image_right/output" />
+      <arg name="debug_view" value="false" />
+      <arg name="h_limit_max" value="24" />
+      <arg name="h_limit_min" value="2" />
+      <arg name="s_limit_max" value="256" />
+      <arg name="s_limit_min" value="0" />
+      <arg name="v_limit_max" value="255" />
+      <arg name="v_limit_min" value="0" />
+    </include>
+
+    <node name="erode_mask_image_right"
+          pkg="jsk_perception" type="erode_mask_image" >
+      <remap from="~input" to="hsv_color_filter_right/image" />
+    </node>
+
+    <node name="dilate_mask_image_right"
+          pkg="jsk_perception" type="dilate_mask_image" >
+      <remap from="~input" to="erode_mask_image_right/output" />
+    </node>
+
+    <node name="mask_image_to_point_indices_right"
+    	  pkg="nodelet" type="nodelet"
+          args="load jsk_pcl_utils/MaskImageToPointIndices $(arg MANAGER)"
+          output="screen" clear_params="true" >
+      <remap from="~input" to="dilate_mask_image_right/output" />
+    </node>
+
+    <node name="extract_indices_right"
+    	  pkg="nodelet" type="nodelet"
+          args="load pcl/ExtractIndices $(arg MANAGER)"
+          output="screen" clear_params="true">
+      <remap from="~input" to="$(arg INPUT_CLOUD)_relayed" />
+      <remap from="~indices" to="mask_image_to_point_indices_right/output" />
+      <rosparam>
+        approximate_sync: true
+        max_queue_size: 50
+      </rosparam>
+    </node>
+    
+    <node name="centroid_publisher_right"
+    	  pkg="nodelet" type="nodelet"
+          args="load jsk_pcl/CentroidPublisher $(arg MANAGER)"
+          output="screen" clear_params="true">
+      <remap from="~input" to="extract_indices_right/output" />
+      <rosparam>
+        publish_tf: true
+      </rosparam>
+    </node>
+  <!-- </group> -->
+  <!-- end RHand -->
+
+  <!-- for LHand -->
+  <node name="people_mask_publisher_left"
+        pkg="jsk_perception" type="people_mask_publisher.py"
+        output="screen">
+    <remap from="~input" to="$(arg INPUT_IMAGE)" />
+    <remap from="~input/pose" to="people_pose_estimation_2d/pose_2d" />
+    <rosparam>
+      person_indices: 0
+      limb_part: LHand
+    </rosparam>
+  </node>
+
+  <node name="apply_mask_image_left"
+        pkg="nodelet" type="nodelet"
+        args="standalone jsk_perception/ApplyMaskImage" >
+    <remap from="~input" to="$(arg INPUT_IMAGE)" />
+    <remap from="~input/mask" to="people_mask_publisher_left/output" />
+    <rosparam>
+      clip: false
+    </rosparam>
+  </node>
+
+  <include file="$(find opencv_apps)/launch/hsv_color_filter.launch" >
+    <arg name="node_name" value="hsv_color_filter_left" />
+    <arg name="image" value="apply_mask_image_left/output" />
+    <arg name="debug_view" value="false" />
+    <arg name="h_limit_max" value="24" />
+    <arg name="h_limit_min" value="2" />
+    <arg name="s_limit_max" value="256" />
+    <arg name="s_limit_min" value="0" />
+    <arg name="v_limit_max" value="255" />
+    <arg name="v_limit_min" value="0" />
+  </include>
+
+  <node name="erode_mask_image_left"
+        pkg="jsk_perception" type="erode_mask_image" >
+    <remap from="~input" to="hsv_color_filter_left/image" />
+  </node>
+
+  <node name="dilate_mask_image_left"
+        pkg="jsk_perception" type="dilate_mask_image" >
+    <remap from="~input" to="erode_mask_image_left/output" />
+  </node>
+
+  <node name="mask_image_to_point_indices_left"
+  	pkg="nodelet" type="nodelet"
+        args="load jsk_pcl_utils/MaskImageToPointIndices $(arg MANAGER)"
+        output="screen" clear_params="true" >
+    <remap from="~input" to="dilate_mask_image_left/output" />
+  </node>
+
+  <node name="extract_indices_left"
+  	pkg="nodelet" type="nodelet"
+        args="load pcl/ExtractIndices $(arg MANAGER)"
+        output="screen" clear_params="true">
+    <remap from="~input" to="$(arg INPUT_CLOUD)_relayed" />
+    <remap from="~indices" to="mask_image_to_point_indices_left/output" />
+    <rosparam>
+      approximate_sync: true
+      max_queue_size: 50
+    </rosparam>
+  </node>
+  
+  <node name="centroid_publisher_left"
+  	pkg="nodelet" type="nodelet"
+        args="load jsk_pcl/CentroidPublisher $(arg MANAGER)"
+        output="screen" clear_params="true">
+    <remap from="~input" to="extract_indices_left/output" />
+    <rosparam>
+      publish_tf: true
+    </rosparam>
+  </node>
+  <!-- end LHand -->
+
+  <group if="$(arg gui)" >
+    <node name="rviz"
+          pkg="rviz" type="rviz"
+	  args="-d $(find jsk_perception)/sample/rviz/people_pose_estimation_2d.rviz" />
+  </group>
+
+</launch>

@@ -486,6 +486,7 @@ class PeoplePoseEstimation2D(ConnectionBasedTransport):
         joint_cands_indices = np.delete(joint_cands_indices, deleteIdx, axis=0)
 
         if self.visualize:
+            # bgr_img = np.zeros(bgr_img.shape)
             result_img = self._visualize(
                 bgr_img, joint_cands_indices, all_peaks, candidate)
         else:

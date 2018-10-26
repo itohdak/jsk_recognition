@@ -155,52 +155,6 @@ class PeopleMaskPublisher(ConnectionBasedTransport):
                               color, rectangle_thickness)
         return mask_img, img
 
-    def _create_nose_mask(self, people_pose, img):
-        rectangle_thickness = 5
-        color = (0, 255, 0)
-
-        mask_img = np.zeros((img.shape[0], img.shape[1]), dtype=np.bool)
-        for person_pose in people_pose:
-            try:
-                nose_index = person_pose.limb_names.index('Nose')
-            except ValueError:
-                continue
-            nose = person_pose.poses[nose_index]
-            x = int(nose.position.x)
-            y = int(nose.position.y)
-            margin = 15
-            mask_img[y-margin : y+margin, x-margin : x+margin] = True
-            cv2.rectangle(img, (x-margin, y-margin), (x+margin, y+margin),
-                          color, rectangle_thickness)
-        return mask_img, img
-
-    # def _create_body_mask(self, people_pose, img):
-    #     rectangle_thickness = 5
-    #     color = (0, 255, 0)
-
-    #     mask_img = np.zeros((img.shape[0], img.shape[1]), dtype=np.bool)
-    #     for person_pose in people_pose:
-    #         try:
-    #             RShoulder_index = person_pose.limb_names.index('RShoulder')
-    #             LShoulder_index = person_pose.limb_names.index('LShoulder')
-    #             RHip_index = person_pose.limb_names.index('RHip')
-    #             LHip_index = person_pose.limb_names.index('LHip')
-    #         except ValueError:
-    #             continue
-    #         RShoulder = person_pose.poses[RShoulder_index]
-    #         LShoulder = person_pose.poses[LShoulder_index]
-    #         RHip = person_pose.poses[RHip_index]
-    #         LHip = person_pose.poses[LHip_index]
-    #         center_of_Shoulders = (RShoulder + LShoulder) / 2.0
-    #         center_of_Hips = (RHip + LHip) / 2.0
-    #         x = int(nose.position.x)
-    #         y = int(nose.position.y)
-    #         margin = 15
-    #         mask_img[y-margin : y+margin, x-margin : x+margin] = True
-    #         cv2.rectangle(img, (x-margin, y-margin), (x+margin, y+margin),
-    #                       color, rectangle_thickness)
-    #     return mask_img, img
-
 if __name__ == '__main__':
     rospy.init_node('people_mask_publisher')
     PeopleMaskPublisher()
