@@ -204,6 +204,8 @@ class PeopleMaskPublisher(ConnectionBasedTransport):
                             if self.prev_hand_position[0] == None:
                                 continue
                     else:
+                        if self.prev_hand_position[0] == None:
+                            continue
                         cand_rect = rects[np.argmin([(rect.x+rect.width/2.0-(self.prev_hand_position[0]+self.prev_hand_position[2]/2.0))**2 + \
                                                      (rect.y+rect.height/2.0-(self.prev_hand_position[1]+self.prev_hand_position[3]/2.0))**2 for rect in rects])]
 
