@@ -48,6 +48,8 @@ class PeopleMaskPublisher(ConnectionBasedTransport):
         self.face_ratio = rospy.get_param('~face_ratio', 0.6)
         self.face_shoulder_ratio = rospy.get_param('~face_shoulder_ratio', 0.5)
         self.face_width_margin_ratio = rospy.get_param('~face_width_margin_ratio', 1.3)
+        self.toe_ratio = rospy.get_param('~toe_ratio', 0.2)
+        self.toe_width_ratio = rospy.get_param('~toe_width_ratio', 0.8)
 
         self.pub = self.advertise('~output', Image, queue_size=1)
         self.debug_pub = self.advertise('~debug/output', Image, queue_size=1)
@@ -87,12 +89,17 @@ class PeopleMaskPublisher(ConnectionBasedTransport):
         arm = [limb_prefix for limb_prefix in ['R', 'L']
                if limb_prefix + 'Hand' in self.limb_part]
         nose = 'Nose' in self.limb_part
+        toe = [limb_prefix for limb_prefix in ['R', 'L']
+                 if limb_prefix + 'Toe' in self.limb_part]
         if arm:
             arm_mask_img, debug_img = self._create_hand_mask(people_pose, img, arm)
             mask_img = np.bitwise_or(mask_img, arm_mask_img)
         if nose:
             nose_mask_img, debug_img = self._create_nose_mask(people_pose, img)
             mask_img = np.bitwise_or(mask_img, nose_mask_img)
+        if toe:
+            toe_mask_img, debug_img = self._create_toe_mask(people_pose, img, toe)
+            mask_img = np.bitwise_or(mask_img, toe_mask_img)
 
         mask_msg = br.cv2_to_imgmsg(np.uint8(mask_img * 255.0), encoding='mono8')
         mask_msg.header = img_msg.header
@@ -229,6 +236,57 @@ class PeopleMaskPublisher(ConnectionBasedTransport):
             cv2.rectangle(img, (x, y), (x + width, y + height),
                           color, rectangle_thickness)
         return mask_img, img
+
+    def _create_toe_mask(self, people_pose, img, toe=['R', 'L']):
+        rectangle_thickness = 5
+        rectangle_colors = [(0, 255, 0), (0, 0, 255)]
+
+        mask_img = np.zeros((img.shape[0], img.shape[1]), dtype=np.bool)
+        for person_pose in people_pose:
+            for limb_prefix, color in zip(toe, rectangle_colors):
+                try:
+                    hip_index = person_pose.limb_names.index(
+                        limb_prefix + 'Hip')
+                    knee_index = person_pose.limb_names.index(
+                        limb_prefix + 'Knee')
+                    ankle_index = person_pose.limb_names.index(
+                        limb_prefix + 'Ankle')
+                except ValueError:
+                    continue
+
+                if not np.all(np.array(person_pose.scores)[[hip_index, knee_index, ankle_index]] > self.arms_score_threshold):
+                    continue
+
+                hip = person_pose.poses[hip_index]
+                knee = person_pose.poses[knee_index]
+                ankle = person_pose.poses[ankle_index]
+
+                x = ankle.position.x + self.toe_ratio * \
+                    (ankle.position.x - knee.position.x)
+                y = ankle.position.y + self.toe_ratio * \
+                    (ankle.position.y - knee.position.y)
+
+                ankle_to_knee_length = ((ankle.position.x - knee.position.x)
+                                         ** 2 + (ankle.position.y - knee.position.y) ** 2) ** 0.5
+                knee_to_hip_length = ((hip.position.x - knee.position.x) ** 2 + (
+                    hip.position.y - knee.position.y) ** 2) ** 0.5
+                width = self.toe_width_ratio * \
+                    max(ankle_to_knee_length, 0.9 * knee_to_hip_length)
+                height = width
+
+                x -= width / 2.0
+                y -= height / 2.0
+
+                x = int(x)
+                y = int(y)
+                width = int(width)
+                height = int(height)
+
+                mask_img[y:y + height, x:x + width] = True
+                cv2.rectangle(img, (x, y), (x + width, y + height),
+                              color, rectangle_thickness)
+        return mask_img, img
+
 
 if __name__ == '__main__':
     rospy.init_node('people_mask_publisher')
