@@ -4,6 +4,8 @@
   <arg name="INPUT_IMAGE" default="/$(arg camera)/rgb/image_rect_color" />
   <arg name="gui" default="true" />
 
+  <include file="$(find jsk_perception)/sample/include/play_rosbag_people.xml" />
+
   <group ns="$(arg NAME_SPACE)">
     <node name="ssd_object_detector"
           pkg="jsk_perception" type="ssd_object_detector.py"
