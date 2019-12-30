@@ -6,6 +6,8 @@ import rospy
 from audio_common_msgs.msg import AudioData
 from jsk_recognition_msgs.msg import Spectrum
 
+import librosa
+
 
 # This node execute FFT to audio (audio_common_msgs/AudioData)
 # The number of audio channel is assumed to be 1.
@@ -58,6 +60,8 @@ class AudioToSpectrum(object):
             '~spectrum', Spectrum, queue_size=1)
         self.pub_spectrum_filtered = rospy.Publisher(
             '~spectrum_filtered', Spectrum, queue_size=1)
+        self.pub_mfcc = rospy.Publisher(
+            '~mfcc_spectrum', Spectrum, queue_size=1)
         rospy.Timer(rospy.Duration(1. / self.fft_exec_rate), self.timer_cb)
 
     def audio_cb(self, msg):
@@ -83,6 +87,14 @@ class AudioToSpectrum(object):
         spectrum_msg.amplitude = amplitude[self.cutoff_mask]
         spectrum_msg.frequency = self.freq[self.cutoff_mask]
         self.pub_spectrum_filtered.publish(spectrum_msg)
+
+        mfccs = librosa.feature.mfcc(self.audio_buffer.astype(np.float), sr=16000)
+        # mfccs = librosa.power_to_db(mfccs, ref=np.max)
+        # mfccs = 10 * np.log10(mfccs)
+        mfcc_msg = Spectrum()
+        mfcc_msg.header.stamp = rospy.Time.now()
+        mfcc_msg.amplitude = mfccs[:, -1]
+        self.pub_mfcc.publish(mfcc_msg)
 
 
 if __name__ == '__main__':
