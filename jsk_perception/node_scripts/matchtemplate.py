@@ -62,6 +62,8 @@ class MepConverter:
         self.templates = {} # frame_id : ref_image,ser_frame,ser_rect
         self.clock = [rospy.Time.now()]
 
+        self.server = DynamicReconfigureServer(ConfigType, self.reconfigure)
+
         # publisher
         self.reference_pub = rospy.Publisher(
             "current_template", Image, queue_size=1)
@@ -79,8 +81,6 @@ class MepConverter:
             PointStamped,self.set_reference_point_callback,queue_size=1)
         self.search_sub = rospy.Subscriber(rospy.resolve_name("set_search_rect"),
                                            Rect,self.set_search_callback,queue_size=1)
-
-        self.server = DynamicReconfigureServer(ConfigType, self.reconfigure)
 
     # general template modifier function
     def set_template (self, ref_id='', ref_image=None, ref_rect=None,
@@ -138,7 +138,7 @@ class MepConverter:
             rospy.loginfo("set ser_frame id=%s frame=%s", ref_id, ser_frame);
         if ser_rect != None:
             self.templates[ref_id]['ser_rect'] = ser_rect
-            #rospy.loginfo("set ser_rect id=%s %s", ref_id, ser_rect);
+            rospy.loginfo("set ser_rect id=%s %s", ref_id, ser_rect);
         if method != None:
             self.templates[ref_id]['method'] = method
             rospy.loginfo("set method id=%s method=%s", ref_id, method);
@@ -164,10 +164,11 @@ class MepConverter:
                 pt[1]-self.default_template_size[1]/2,
                 self.default_template_size[0], self.default_template_size[1])
         self.set_reference(rect)
-        print rect
+        # print rect
         search_rect = (pt[0]-self.default_search_size[0]/2,
                        pt[1]-self.default_search_size[1]/2,
                        self.default_search_size[0],self.default_search_size[1])
+        # print("search_rect: {}".format(search_rect))
         self.set_template('',ser_frame=None, ser_rect=search_rect)
         self.lockobj.release()
 
@@ -234,10 +235,12 @@ class MepConverter:
                 self.templates[template_id]['ser_frame'] != msg.header.frame_id): continue
 
             # search rect &= image size
+            print("before search_rect: {}".format(search_rect))
             search_rect = (max(0,search_rect[0]),
                            max(0,search_rect[1]),
                            min(msg.width,search_rect[0]+search_rect[2])- max(0,search_rect[0]),
                            min(msg.height,search_rect[1]+search_rect[3])- max(0,search_rect[1]))
+            print("after search_rect: {}".format(search_rect))
 
             result = TransformStamped(header=msg.header)
 
@@ -258,6 +261,7 @@ class MepConverter:
                 if (search_rect[2] < reference_size[0]) or (search_rect[3] < reference_size[1]):
                     continue
 
+                print("search_rect[0]: {}, search_rect[2]: {}".format(search_rect[0], search_rect[2]))
                 results = cv2.matchTemplate(
                     search_image[
                         search_rect[1]:search_rect[1] + search_rect[3],
